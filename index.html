@@ -3,26 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Cifra em PDF</title>
-    <!-- Bibliotecas para gerar PDF no navegador -->
+    <title>Cifra Club Style - Gerador de Cifras</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; text-align: center; margin-top: 50px; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
-        input[type="file"] { margin: 20px 0; }
-        button { background-color: #27ae60; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; }
-        button:hover { background-color: #219150; }
-        #status { margin-top: 15px; font-weight: bold; color: #2c3e50; }
+        :root {
+            --cc-bg: #121212;
+            --cc-card: #1e1e1e;
+            --cc-orange: #ff7900;
+            --cc-yellow: #ffc107;
+            --cc-text: #ffffff;
+            --cc-subtext: #aaa;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--cc-bg);
+            color: var(--cc-text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background-color: var(--cc-card);
+            width: 100%;
+            max-width: 600px;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            border-top: 5px solid var(--cc-orange);
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--cc-orange);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .logo span {
+            color: var(--cc-text);
+        }
+
+        p {
+            color: var(--cc-subtext);
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+
+        .upload-area {
+            border: 2px dashed #333;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background: #181818;
+        }
+
+        input[type="file"] {
+            color: var(--cc-subtext);
+        }
+
+        button {
+            background-color: var(--cc-orange);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            background-color: #e06b00;
+            transform: translateY(-2px);
+        }
+
+        #status {
+            margin-top: 20px;
+            font-weight: 500;
+            color: var(--cc-yellow);
+        }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>Gerar Cifra em PDF</h1>
-        <p>Selecione um arquivo de áudio para analisar a tonalidade, extrair os acordes e baixar o PDF cifrado.</p>
-        
-        <input type="file" id="audioInput" accept="audio/*"><br>
-        <button onclick="processarAudio()">Processar Áudio e Baixar PDF</button>
-        
+
+    <div class="container">
+        <div class="logo">cifra<span>club</span></div>
+        <p>Gerador Automático de Cifras em PDF</p>
+
+        <div class="upload-area">
+            <input type="file" id="audioInput" accept="audio/*">
+        </div>
+
+        <button onclick="processarAudio()">Extrair Cifra & Baixar PDF</button>
+
         <div id="status"></div>
     </div>
 
@@ -34,22 +116,21 @@
             const status = document.getElementById('status');
 
             if (input.files.length === 0) {
-                alert('Por favor, selecione um arquivo de áudio primeiro!');
+                alert('Selecione um arquivo de áudio primeiro!');
                 return;
             }
 
             const file = input.files[0];
-            status.innerText = "Lendo e analisando frequências do áudio... Aguarde.";
+            status.innerText = "⚡ Analisando frequências da música...";
 
             try {
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const arrayBuffer = await file.arrayBuffer();
                 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-                // Análise de frequências simples (Pitch/Cromagrama)
                 const channelData = audioBuffer.getChannelData(0);
                 const sampleRate = audioBuffer.sampleRate;
-                const step = Math.floor(sampleRate / 2); // Analisa a cada 0.5s
+                const step = Math.floor(sampleRate / 2);
                 
                 let acordes = [];
                 let contagemNotas = new Array(12).fill(0);
@@ -70,19 +151,18 @@
                     }
                 }
 
-                // Tonalidade mais frequente
                 let maxIdx = contagemNotas.indexOf(Math.max(...contagemNotas));
                 let tonalidade = notes[maxIdx] || 'C';
 
                 if (acordes.length === 0) acordes = ['C', 'G', 'Am', 'F'];
 
-                status.innerText = "Gerando PDF...";
-                gerarPDF(file.name, tonalidade, acordes);
-                status.innerText = "PDF gerado com sucesso!";
+                status.innerText = "📄 Gerando layout no estilo Cifra Club...";
+                gerarPDFEstiloCifraClub(file.name.replace(/\.[^/.]+$/, ""), tonalidade, acordes);
+                status.innerText = "✅ PDF baixado com sucesso!";
 
             } catch (err) {
                 console.error(err);
-                status.innerText = "Erro ao processar o arquivo de áudio.";
+                status.innerText = "❌ Erro ao processar o áudio.";
             }
         }
 
@@ -111,36 +191,72 @@
             return sampleRate / maxpos;
         }
 
-        function gerarPDF(nomeArquivo, tonalidade, acordes) {
+        function gerarPDFEstiloCifraClub(nomeMusica, tonalidade, acordes) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
-            doc.setFontSize(18);
-            doc.text(`Cifra: ${nomeArquivo}`, 20, 20);
+            // Cabeçalho Laranja Cifra Club
+            doc.setFillColor(255, 121, 0);
+            doc.rect(0, 0, 210, 25, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(16);
+            doc.text("cifra club", 15, 16);
 
-            doc.setFontSize(12);
-            doc.text(`Tonalidade Estimada: ${tonalidade}`, 20, 30);
-            doc.line(20, 35, 190, 35);
+            // Título da Música e Detalhes
+            doc.setTextColor(30, 30, 30);
+            doc.setFontSize(22);
+            doc.text(nomeMusica, 15, 42);
 
-            doc.setFontSize(14);
-            doc.text("Progressao de Acordes Detectada:", 20, 48);
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Tom: ${tonalidade}  |  Afinação: Padrão (E A D G B E)`, 15, 50);
 
+            // Linha divisória
+            doc.setDrawColor(220, 220, 220);
+            doc.line(15, 55, 195, 55);
+
+            // Bloco de Cifra Estilizado
             doc.setFont("courier", "bold");
             doc.setFontSize(12);
-            
-            let y = 60;
-            let linha = "";
+
+            let y = 70;
+            let blocoAcordes = "";
+
+            doc.setTextColor(255, 121, 0); // Acordes na cor Laranja tradicional do Cifra Club
+            doc.text("[Intro] " + acordes.slice(0, 4).join("  "), 15, y);
+            y += 15;
+
+            doc.setTextColor(0, 0, 0);
+            doc.text("Primeira Parte:", 15, y);
+            y += 10;
+
             for (let i = 0; i < acordes.length; i++) {
-                linha += `[${acordes[i]}] `;
-                if ((i + 1) % 8 === 0) {
-                    doc.text(linha, 20, y);
-                    y += 10;
-                    linha = "";
+                blocoAcordes += acordes[i] + "  ";
+                if ((i + 1) % 6 === 0) {
+                    doc.setTextColor(255, 121, 0); // Cor laranja nos acordes
+                    doc.text(blocoAcordes, 15, y);
+                    y += 7;
+                    doc.setTextColor(100, 100, 100); // Letra/Base em cinza escuro
+                    doc.text("la la la / instrumental da musica...", 15, y);
+                    y += 12;
+                    blocoAcordes = "";
+                }
+
+                if (y > 270) {
+                    doc.addPage();
+                    y = 20;
                 }
             }
-            if (linha) doc.text(linha, 20, y);
 
-            doc.save("cifra_musica.pdf");
+            if (blocoAcordes) {
+                doc.setTextColor(255, 121, 0);
+                doc.text(blocoAcordes, 15, y);
+            }
+
+            doc.save(`${nomeMusica}_CifraClub.pdf`);
         }
     </script>
 </body>

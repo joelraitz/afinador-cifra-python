@@ -48,10 +48,7 @@
         .logo span { color: var(--cc-text); }
         p { color: var(--cc-subtext); font-size: 14px; margin-bottom: 20px; }
 
-        .form-group {
-            text-align: left;
-            margin-bottom: 15px;
-        }
+        .form-group { text-align: left; margin-bottom: 15px; }
 
         label {
             display: block;
@@ -73,11 +70,7 @@
             font-family: inherit;
         }
 
-        textarea {
-            height: 120px;
-            resize: vertical;
-            font-family: monospace;
-        }
+        textarea { height: 120px; resize: vertical; font-family: monospace; }
 
         .upload-area {
             border: 2px dashed #333;
@@ -104,23 +97,15 @@
             text-transform: uppercase;
         }
 
-        button:hover {
-            background-color: #e06b00;
-            transform: translateY(-2px);
-        }
-
-        #status {
-            margin-top: 20px;
-            font-weight: 500;
-            color: var(--cc-yellow);
-        }
+        button:hover { background-color: #e06b00; transform: translateY(-2px); }
+        #status { margin-top: 20px; font-weight: 500; color: var(--cc-yellow); }
     </style>
 </head>
 <body>
 
     <div class="container">
         <div class="logo">cifra<span>club</span></div>
-        <p>Gerador de Cifras e Transcrição com IA do Navegador</p>
+        <p>Gerador de Cifras Harmônicas (Maiores e Menores)</p>
 
         <div class="form-group">
             <label for="songTitle">Nome da Música / Artista</label>
@@ -129,7 +114,7 @@
 
         <div class="form-group">
             <label for="lyricsInput">Letra da Música (Opcional)</label>
-            <textarea id="lyricsInput" placeholder="Cole a letra da música aqui. Os acordes extraídos do áudio serão posicionados automaticamente acima de cada linha."></textarea>
+            <textarea id="lyricsInput" placeholder="Cole a letra da música aqui para acoplar com os acordes maiores e menores extraídos do áudio."></textarea>
         </div>
 
         <div class="upload-area">
@@ -137,13 +122,13 @@
             <input type="file" id="audioInput" accept="audio/*">
         </div>
 
-        <button onclick="processarAudio()">Gerar Cifra Completa em PDF</button>
+        <button onclick="processarAudio()">Extrair Acordes Maior/Menor & Gerar PDF</button>
 
         <div id="status"></div>
     </div>
 
     <script>
-        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
         async function processarAudio() {
             const input = document.getElementById('audioInput');
@@ -157,7 +142,7 @@
             }
 
             const file = input.files[0];
-            status.innerText = "⚡ Analisando frequências da música e extraindo harmonia...";
+            status.innerText = "⚡ Mapeando perfil cromático (procurando acordes maiores e menores)...";
 
             try {
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -166,35 +151,35 @@
 
                 const channelData = audioBuffer.getChannelData(0);
                 const sampleRate = audioBuffer.sampleRate;
-                const step = Math.floor(sampleRate / 2);
+                const windowSize = 4096;
+                const step = Math.floor(sampleRate * 0.8); // Analisa a cada 0.8 segundos
                 
                 let acordes = [];
                 let contagemNotas = new Array(12).fill(0);
 
-                for (let i = 0; i < channelData.length; i += step) {
-                    let slice = channelData.slice(i, i + 2048);
-                    let freq = estimarPitch(slice, sampleRate);
+                for (let i = 0; i < channelData.length - windowSize; i += step) {
+                    let slice = channelData.slice(i, i + windowSize);
+                    let chroma = calcularChroma(slice, sampleRate);
+                    let acordeDetectado = identificarTríade(chroma);
                     
-                    if (freq > 60 && freq < 1000) {
-                        let noteNum = Math.round(12 * Math.log2(freq / 440) + 69);
-                        let noteIdx = (noteNum % 12 + 12) % 12;
-                        let nota = notes[noteIdx];
-                        
-                        contagemNotas[noteIdx]++;
-                        if (acordes.length === 0 || acordes[acordes.length - 1] !== nota) {
-                            acordes.push(nota);
+                    if (acordeDetectado) {
+                        let baseNoteIdx = noteNames.indexOf(acordeDetectado.replace('m', ''));
+                        if (baseNoteIdx !== -1) contagemNotas[baseNoteIdx]++;
+
+                        if (acordes.length === 0 || acordes[acordes.length - 1] !== acordeDetectado) {
+                            acordes.push(acordeDetectado);
                         }
                     }
                 }
 
                 let maxIdx = contagemNotas.indexOf(Math.max(...contagemNotas));
-                let tonalidade = notes[maxIdx] || 'C';
+                let tonalidade = noteNames[maxIdx] || 'C';
 
-                if (acordes.length === 0) acordes = ['C', 'G', 'Am', 'F'];
+                if (acordes.length === 0) acordes = ['C', 'Am', 'F', 'G'];
 
-                status.innerText = "📄 Montando layout no padrão Cifra Club...";
+                status.innerText = "📄 Gerando PDF estilizado...";
                 gerarPDFEstiloCifraClub(songTitle, tonalidade, acordes, lyricsText);
-                status.innerText = "✅ PDF gerado e baixado com sucesso!";
+                status.innerText = "✅ PDF com acordes Maiores e Menores baixado!";
 
             } catch (err) {
                 console.error(err);
@@ -202,36 +187,63 @@
             }
         }
 
-        function estimarPitch(buffer, sampleRate) {
-            let SIZE = buffer.length;
-            let rms = 0;
-            for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
-            if (Math.sqrt(rms / SIZE) < 0.01) return -1;
+        // Calcula a energia harmônica em cada uma das 12 notas fundamentais
+        function calcularChroma(buffer, sampleRate) {
+            let chroma = new Array(12).fill(0);
+            let size = buffer.length;
 
-            let c = new Array(SIZE).fill(0);
-            for (let i = 0; i < SIZE; i++) {
-                for (let j = 0; j < SIZE - i; j++) {
-                    c[i] += buffer[j] * buffer[j + i];
+            for (let noteIdx = 0; noteIdx < 12; noteIdx++) {
+                // Soma a energia de várias oitavas da mesma nota
+                for (let octave = 2; octave <= 5; octave++) {
+                    let freq = 440 * Math.pow(2, (noteIdx - 9) / 12 + (octave - 4));
+                    let k = Math.round((freq * size) / sampleRate);
+                    
+                    if (k < size / 2) {
+                        let real = 0, imag = 0;
+                        for (let n = 0; n < size; n += 4) { // Sub-amostragem para performance
+                            let angle = (2 * Math.PI * k * n) / size;
+                            real += buffer[n] * Math.cos(angle);
+                            imag -= buffer[n] * Math.sin(angle);
+                        }
+                        chroma[noteIdx] += Math.sqrt(real * real + imag * imag);
+                    }
                 }
             }
+            return chroma;
+        }
 
-            let d = 0;
-            while (c[d] > c[d + 1]) d++;
-            let maxval = -1, maxpos = -1;
-            for (let i = d; i < SIZE; i++) {
-                if (c[i] > maxval) {
-                    maxval = c[i];
-                    maxpos = i;
+        // Avalia se o perfil de energia combina melhor com uma Tríade Maior ou Menor
+        function identificarTríade(chroma) {
+            let maxScore = -1;
+            let bestChord = null;
+
+            for (let root = 0; root < 12; root++) {
+                let thirdMajor = (root + 4) % 12;
+                let thirdMinor = (root + 3) % 12;
+                let fifth = (root + 7) % 12;
+
+                // Score Acorde Maior (Fundamental + Terça Maior + Quinta)
+                let scoreMajor = chroma[root] * 1.2 + chroma[thirdMajor] * 1.0 + chroma[fifth] * 0.8;
+                
+                // Score Acorde Menor (Fundamental + Terça Menor + Quinta)
+                let scoreMinor = chroma[root] * 1.2 + chroma[thirdMinor] * 1.0 + chroma[fifth] * 0.8;
+
+                if (scoreMajor > maxScore && scoreMajor > 1.5) {
+                    maxScore = scoreMajor;
+                    bestChord = noteNames[root];
+                }
+                if (scoreMinor > maxScore && scoreMinor > 1.5) {
+                    maxScore = scoreMinor;
+                    bestChord = noteNames[root] + "m"; // Adiciona o 'm' para menor
                 }
             }
-            return sampleRate / maxpos;
+            return bestChord;
         }
 
         function gerarPDFEstiloCifraClub(nomeMusica, tonalidade, acordes, letra) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
-            // Topo Laranja
             doc.setFillColor(255, 121, 0);
             doc.rect(0, 0, 210, 25, 'F');
             
@@ -240,7 +252,6 @@
             doc.setFontSize(16);
             doc.text("cifra club", 15, 16);
 
-            // Título e Tom
             doc.setTextColor(30, 30, 30);
             doc.setFontSize(20);
             doc.text(nomeMusica, 15, 40);
@@ -264,15 +275,13 @@
                 
                 linhas.forEach((linha) => {
                     if (linha.trim() !== "") {
-                        // Linha de Acordes (Laranja)
-                        let acordeLinha = (acordes[chordIdx % acordes.length] || 'C') + "          " + (acordes[(chordIdx + 1) % acordes.length] || 'G');
+                        let acordeLinha = (acordes[chordIdx % acordes.length] || 'C') + "          " + (acordes[(chordIdx + 1) % acordes.length] || 'Am');
                         chordIdx += 2;
 
                         doc.setTextColor(255, 121, 0);
                         doc.text(acordeLinha, 15, y);
                         y += 6;
 
-                        // Linha da Letra (Preto)
                         doc.setTextColor(40, 40, 40);
                         doc.setFont("courier", "normal");
                         doc.text(linha.substring(0, 60), 15, y);
@@ -288,7 +297,6 @@
                     }
                 });
             } else {
-                // Caso não tenha letra, exibe a sequência de acordes estilo tablatura/intro
                 doc.setTextColor(255, 121, 0);
                 doc.text("[Intro] " + acordes.slice(0, 4).join("  "), 15, y);
                 y += 12;

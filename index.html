@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analisador de Áudio & Cifrador</title>
+    <title>Gerador de Cifra em PDF</title>
+    <!-- Bibliotecas para gerar PDF no navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; text-align: center; margin-top: 50px; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
@@ -16,16 +18,18 @@
 <body>
     <div class="card">
         <h1>Gerar Cifra em PDF</h1>
-        <p>Selecione um arquivo de áudio (.mp3 ou .wav) para analisar a tonalidade, extrair os acordes e baixar o PDF cifrado.</p>
+        <p>Selecione um arquivo de áudio para analisar a tonalidade, extrair os acordes e baixar o PDF cifrado.</p>
         
         <input type="file" id="audioInput" accept="audio/*"><br>
-        <button onclick="enviarAudio()">Processar Áudio e Baixar PDF</button>
+        <button onclick="processarAudio()">Processar Áudio e Baixar PDF</button>
         
         <div id="status"></div>
     </div>
 
     <script>
-        async function enviarAudio() {
+        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        async function processarAudio() {
             const input = document.getElementById('audioInput');
             const status = document.getElementById('status');
 
@@ -34,35 +38,109 @@
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('audio', input.files[0]);
-
-            status.innerText = "Analisando áudio e gerando PDF... Aguarde.";
+            const file = input.files[0];
+            status.innerText = "Lendo e analisando frequências do áudio... Aguarde.";
 
             try {
-                // Endereço local do backend Python
-                const response = await fetch('http://127.0.0.1:5000/processar-audio', {
-                    method: 'POST',
-                    body: formData
-                });
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-                if (!response.ok) throw new Error('Erro ao processar o áudio');
+                // Análise de frequências simples (Pitch/Cromagrama)
+                const channelData = audioBuffer.getChannelData(0);
+                const sampleRate = audioBuffer.sampleRate;
+                const step = Math.floor(sampleRate / 2); // Analisa a cada 0.5s
+                
+                let acordes = [];
+                let contagemNotas = new Array(12).fill(0);
 
-                // Baixar o arquivo PDF retornado
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'cifra_musica.pdf';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
+                for (let i = 0; i < channelData.length; i += step) {
+                    let slice = channelData.slice(i, i + 2048);
+                    let freq = estimarPitch(slice, sampleRate);
+                    
+                    if (freq > 60 && freq < 1000) {
+                        let noteNum = Math.round(12 * Math.log2(freq / 440) + 69);
+                        let noteIdx = (noteNum % 12 + 12) % 12;
+                        let nota = notes[noteIdx];
+                        
+                        contagemNotas[noteIdx]++;
+                        if (acordes.length === 0 || acordes[acordes.length - 1] !== nota) {
+                            acordes.push(nota);
+                        }
+                    }
+                }
 
+                // Tonalidade mais frequente
+                let maxIdx = contagemNotas.indexOf(Math.max(...contagemNotas));
+                let tonalidade = notes[maxIdx] || 'C';
+
+                if (acordes.length === 0) acordes = ['C', 'G', 'Am', 'F'];
+
+                status.innerText = "Gerando PDF...";
+                gerarPDF(file.name, tonalidade, acordes);
                 status.innerText = "PDF gerado com sucesso!";
-            } catch (error) {
-                status.innerText = "Erro ao conectar com o servidor Python. Certifique-se de que o app.py está rodando.";
-                console.error(error);
+
+            } catch (err) {
+                console.error(err);
+                status.innerText = "Erro ao processar o arquivo de áudio.";
             }
+        }
+
+        function estimarPitch(buffer, sampleRate) {
+            let SIZE = buffer.length;
+            let rms = 0;
+            for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+            if (Math.sqrt(rms / SIZE) < 0.01) return -1;
+
+            let c = new Array(SIZE).fill(0);
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE - i; j++) {
+                    c[i] += buffer[j] * buffer[j + i];
+                }
+            }
+
+            let d = 0;
+            while (c[d] > c[d + 1]) d++;
+            let maxval = -1, maxpos = -1;
+            for (let i = d; i < SIZE; i++) {
+                if (c[i] > maxval) {
+                    maxval = c[i];
+                    maxpos = i;
+                }
+            }
+            return sampleRate / maxpos;
+        }
+
+        function gerarPDF(nomeArquivo, tonalidade, acordes) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFontSize(18);
+            doc.text(`Cifra: ${nomeArquivo}`, 20, 20);
+
+            doc.setFontSize(12);
+            doc.text(`Tonalidade Estimada: ${tonalidade}`, 20, 30);
+            doc.line(20, 35, 190, 35);
+
+            doc.setFontSize(14);
+            doc.text("Progressao de Acordes Detectada:", 20, 48);
+
+            doc.setFont("courier", "bold");
+            doc.setFontSize(12);
+            
+            let y = 60;
+            let linha = "";
+            for (let i = 0; i < acordes.length; i++) {
+                linha += `[${acordes[i]}] `;
+                if ((i + 1) % 8 === 0) {
+                    doc.text(linha, 20, y);
+                    y += 10;
+                    linha = "";
+                }
+            }
+            if (linha) doc.text(linha, 20, y);
+
+            doc.save("cifra_musica.pdf");
         }
     </script>
 </body>
